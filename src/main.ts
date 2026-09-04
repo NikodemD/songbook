@@ -1,6 +1,6 @@
 import "./styles.css";
 import { isStandalone } from "./dom";
-import { renderScales } from "./screens/scales";
+import { renderScales, closeScaleOverlay } from "./screens/scales";
 import { renderProgressions } from "./screens/progressions";
 import { renderSongs } from "./screens/songs";
 import { renderTabs } from "./screens/tabs";
@@ -75,6 +75,7 @@ function mount(): void {
   });
 
   stopTuner();
+  closeScaleOverlay();
   const screen = app.querySelector<HTMLElement>("#screen")!;
   if (tab === "scales") renderScales(screen);
   if (tab === "progressions") renderProgressions(screen);

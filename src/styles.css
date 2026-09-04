@@ -185,6 +185,143 @@ textarea {
   padding-bottom: 6px;
 }
 
+.fret-wrap.compact {
+  appearance: none;
+  display: block;
+  width: calc(100% + 8px);
+  margin: 8px -4px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  text-align: left;
+  position: relative;
+}
+
+.fret-wrap.compact .fretboard {
+  grid-template-rows: repeat(6, 18px) 14px;
+  min-width: 0;
+  width: 100%;
+}
+
+.fret-wrap.compact .string-row,
+.fret-wrap.compact .fret-nums {
+  grid-template-columns: 22px repeat(12, minmax(0, 1fr));
+}
+
+.fret-wrap.compact .dot {
+  width: 14px;
+  height: 14px;
+  font-size: 0.45rem;
+}
+
+.fret-wrap.compact .nut {
+  border-right-width: 3px;
+  font-size: 0.55rem;
+}
+
+.fret-wrap.compact .fret-num {
+  font-size: 0.55rem;
+}
+
+.fret-wrap.compact .string-row::before {
+  left: 22px;
+}
+
+.fret-hint {
+  display: block;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--gold);
+  padding: 8px 0 2px;
+}
+
+.fret-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #14100d;
+  display: flex;
+  flex-direction: column;
+  padding: calc(8px + var(--safe-t)) 10px calc(10px + var(--safe-b));
+}
+
+.fret-overlay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 650;
+}
+
+.fretboard.vertical {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px repeat(6, minmax(0, 1fr));
+  grid-template-rows: 26px repeat(13, minmax(0, 1fr));
+  background: linear-gradient(#3a2418, #6a4028 8%, #4a2c1c 50%, #3a2418);
+}
+
+.fretboard.vertical .fret-cell.nut {
+  border-right: 0;
+  border-bottom: 5px solid #f3ead6;
+}
+
+.fretboard.vertical .fret-cell {
+  border-right: 0;
+  border-bottom: 2px solid rgba(243, 234, 214, 0.28);
+}
+
+.fretboard.vertical .dot {
+  width: 22px;
+  height: 22px;
+  font-size: 0.62rem;
+}
+
+.voicing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.voicing-card {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px;
+  color: inherit;
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+}
+
+.voicing-card .diagram {
+  min-width: 72px;
+}
+
+.voicing-card .diagram svg {
+  width: 80px;
+  height: 102px;
+}
+
+.chord-tab {
+  margin: 0;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
 .fretboard {
   display: grid;
   grid-template-rows: repeat(6, 36px) 22px;

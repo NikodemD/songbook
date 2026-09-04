@@ -69,7 +69,10 @@ export function renderScales(root: HTMLElement): void {
           <h2>${noteName(state.key, pref)} ${scale.name}</h2>
           <p class="muted">${scale.flavor ? `${scale.flavor} · ` : ""}${scale.degrees.join(" · ")}</p>
           <p class="muted">${tuning.name}</p>
-          <div class="fret-wrap">${fretboardHtml(tuning.midi, pitches, state.key, scale, pref, state.labels)}</div>
+          <button type="button" class="fret-wrap compact" data-expand aria-label="Expand fretboard">
+            ${fretboardHtml(tuning.midi, pitches, state.key, scale, pref, state.labels, "horizontal")}
+            <span class="fret-hint">Tap to expand</span>
+          </button>
           <div class="legend">
             <span><i style="background:var(--root)"></i>Root</span>
             <span><i style="background:#f3ead6"></i>Scale tone</span>
@@ -129,9 +132,42 @@ export function renderScales(root: HTMLElement): void {
       state.labels = state.labels === "notes" ? "degrees" : "notes";
       paint();
     });
+
+    root.querySelector("[data-expand]")?.addEventListener("click", () => {
+      openFretOverlay(tuning.midi, pitches, state.key, scale, pref, state.labels);
+    });
   };
 
   paint();
+}
+
+export function closeScaleOverlay(): void {
+  document.querySelector(".fret-overlay")?.remove();
+}
+
+function openFretOverlay(
+  midi: number[],
+  pitches: Set<number>,
+  key: number,
+  scale: ScaleDef,
+  pref: AccidentalPref,
+  labels: "notes" | "degrees",
+): void {
+  closeScaleOverlay();
+  const overlay = document.createElement("div");
+  overlay.className = "fret-overlay";
+  overlay.innerHTML = `
+    <div class="fret-overlay-bar">
+      <span>${noteName(key, pref)} ${scale.name}</span>
+      <button type="button" class="btn ghost" data-close>Close</button>
+    </div>
+    ${fretboardHtml(midi, pitches, key, scale, pref, labels, "vertical")}
+  `;
+  overlay.querySelector("[data-close]")?.addEventListener("click", () => closeScaleOverlay());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeScaleOverlay();
+  });
+  document.body.append(overlay);
 }
 
 function fillChips<T>(
@@ -159,35 +195,41 @@ function fretboardHtml(
   scale: ScaleDef,
   pref: AccidentalPref,
   labels: "notes" | "degrees",
+  orientation: "horizontal" | "vertical",
 ): string {
+  const cell = (openMidi: number, fret: number, extra = ""): string => {
+    const pc = (openMidi + fret) % 12;
+    if (!pitches.has(pc)) {
+      return `<div class="fret-cell ${fret === 0 ? "nut" : ""} ${extra}">${fret === 0 ? noteName(openMidi, pref) : ""}</div>`;
+    }
+    const rel = (pc - key + 12) % 12;
+    const isRoot = rel === 0;
+    const isBlue = scale.id === "blues" && rel === 6;
+    const degree = degreeAt(key, scale, pc);
+    const text =
+      labels === "degrees" ? (degree ?? "") : degree ? noteNameForDegree(key, degree) : noteName(pc, pref);
+    const cls = `dot${isRoot ? " root" : ""}${isBlue ? " blue" : ""}`;
+    return `<div class="fret-cell ${fret === 0 ? "nut" : ""} ${extra}"><span class="${cls}">${text}</span></div>`;
+  };
+
+  if (orientation === "vertical") {
+    const header = [`<div class="fret-num"></div>`]
+      .concat(midi.map((openMidi) => `<div class="fret-num">${noteName(openMidi, pref)}</div>`))
+      .join("");
+    const rows = Array.from({ length: FRETS + 1 }, (_, fret) => {
+      const label = `<div class="fret-num">${fret === 0 ? "0" : fret}</div>`;
+      const cells = midi.map((openMidi) => cell(openMidi, fret)).join("");
+      return `${label}${cells}`;
+    }).join("");
+    return `<div class="fretboard vertical">${header}${rows}</div>`;
+  }
+
   const strings = [...midi].reverse();
   const rows = strings
-    .map((openMidi) => {
-      const cells = Array.from({ length: FRETS + 1 }, (_, fret) => {
-        const pc = (openMidi + fret) % 12;
-        if (!pitches.has(pc)) {
-          return `<div class="fret-cell ${fret === 0 ? "nut" : ""}">${fret === 0 ? noteName(openMidi, pref) : ""}</div>`;
-        }
-        const rel = (pc - key + 12) % 12;
-        const isRoot = rel === 0;
-        const isBlue = scale.id === "blues" && rel === 6;
-        const degree = degreeAt(key, scale, pc);
-        const text =
-          labels === "degrees"
-            ? (degree ?? "")
-            : degree
-              ? noteNameForDegree(key, degree)
-              : noteName(pc, pref);
-        const cls = `dot${isRoot ? " root" : ""}${isBlue ? " blue" : ""}`;
-        return `<div class="fret-cell ${fret === 0 ? "nut" : ""}"><span class="${cls}">${text}</span></div>`;
-      });
-      return `<div class="string-row">${cells.join("")}</div>`;
-    })
+    .map((openMidi) => `<div class="string-row">${Array.from({ length: FRETS + 1 }, (_, fret) => cell(openMidi, fret)).join("")}</div>`)
     .join("");
-
   const nums = [`<div class="fret-num"></div>`]
     .concat(Array.from({ length: FRETS }, (_, i) => `<div class="fret-num">${i + 1}</div>`))
     .join("");
-
   return `<div class="fretboard">${rows}<div class="fret-nums">${nums}</div></div>`;
 }

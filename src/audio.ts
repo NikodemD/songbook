@@ -30,6 +30,10 @@ const QUALITY_INTERVALS: Record<string, number[]> = {
   aug: [0, 4, 8],
   sus2: [0, 2, 7],
   sus4: [0, 5, 7],
+  "6": [0, 4, 7, 9],
+  m6: [0, 3, 7, 9],
+  "9": [0, 4, 7, 10, 14],
+  add9: [0, 4, 7, 14],
 };
 
 let ctx: AudioContext | null = null;
