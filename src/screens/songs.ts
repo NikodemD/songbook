@@ -6,9 +6,23 @@ import { isTabLine } from "../tabparse";
 import { diagramForSymbol, shapeToTab, voicingForSymbol } from "../voicings";
 import { playChord } from "../audio";
 
-const WONDERWALL_ID = "sample-wonderwall";
-const WONDERWALL_URL = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-27596";
-const WONDERWALL_SEEDED = "songbook-seeded-wonderwall";
+const SAMPLE_SONGS = [
+  {
+    id: "sample-wonderwall",
+    url: "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-27596",
+    title: "Oasis – Wonderwall",
+  },
+  {
+    id: "sample-300-mph",
+    url: "https://tabs.ultimate-guitar.com/tab/the-white-stripes/300-mph-torrential-outpour-blues-chords-1028697",
+    title: "The White Stripes – 300 M.P.H. Torrential Outpour Blues",
+  },
+  {
+    id: "sample-bella-ciao",
+    url: "https://tabs.ultimate-guitar.com/tab/misc-traditional/bella-ciao-chords-1839756",
+    title: "Bella Ciao",
+  },
+];
 
 type View = { mode: "list" } | { mode: "edit"; draft: Draft } | { mode: "read"; id: string };
 
@@ -23,7 +37,7 @@ interface Draft {
 }
 
 let view: View = { mode: "list" };
-let seedingWonderwall = false;
+let seedingSamples = false;
 let chordPop: HTMLElement | null = null;
 
 window.addEventListener("hashchange", closeChordPop);
@@ -80,7 +94,7 @@ async function paint(root: HTMLElement): Promise<void> {
         void paint(root);
       });
     });
-    void ensureWonderwall(root);
+    void ensureSampleSongs(root);
     return;
   }
 
@@ -122,7 +136,8 @@ async function paint(root: HTMLElement): Promise<void> {
       void paint(root);
     });
     root.querySelector("[data-act=delete]")?.addEventListener("click", async () => {
-      if (song.id === WONDERWALL_ID) localStorage.setItem(WONDERWALL_SEEDED, "1");
+      const sample = SAMPLE_SONGS.find((s) => s.id === song.id);
+      if (sample) localStorage.setItem(seedFlag(sample.id), "1");
       await deleteSong(song.id);
       view = { mode: "list" };
       void paint(root);
@@ -180,7 +195,11 @@ async function paint(root: HTMLElement): Promise<void> {
 async function importLink(root: HTMLElement): Promise<void> {
   const input = root.querySelector<HTMLInputElement>("[data-url]");
   const status = root.querySelector("[data-status]");
-  const url = input?.value.trim() || WONDERWALL_URL;
+  const url = input?.value.trim() ?? "";
+  if (!url) {
+    if (status) status.textContent = "Paste a link first.";
+    return;
+  }
   if (status) status.textContent = "Reading that page…";
   try {
     const imported = await importTabFromUrl(url);
@@ -200,35 +219,49 @@ async function importLink(root: HTMLElement): Promise<void> {
   }
 }
 
-async function ensureWonderwall(root: HTMLElement): Promise<void> {
-  if (localStorage.getItem(WONDERWALL_SEEDED) === "1" || seedingWonderwall) return;
-  const existing = await getSong(WONDERWALL_ID);
-  if (existing) {
-    localStorage.setItem(WONDERWALL_SEEDED, "1");
-    return;
+function seedFlag(id: string): string {
+  return `songbook-seeded-${id}`;
+}
+
+async function ensureSampleSongs(root: HTMLElement): Promise<void> {
+  if (seedingSamples) return;
+  const pending: typeof SAMPLE_SONGS = [];
+  for (const sample of SAMPLE_SONGS) {
+    if (localStorage.getItem(seedFlag(sample.id)) === "1") continue;
+    if (await getSong(sample.id)) {
+      localStorage.setItem(seedFlag(sample.id), "1");
+      continue;
+    }
+    pending.push(sample);
   }
-  seedingWonderwall = true;
+  if (!pending.length) return;
+  seedingSamples = true;
   const status = root.querySelector("[data-status]");
-  if (status) status.textContent = "Adding Wonderwall…";
   try {
-    const imported = await importTabFromUrl(WONDERWALL_URL);
-    await saveSong({
-      id: WONDERWALL_ID,
-      title: imported.title || "Oasis – Wonderwall",
-      text: imported.tab,
-      sourceUrl: imported.sourceUrl,
-      createdAt: Date.now(),
-    });
-    localStorage.setItem(WONDERWALL_SEEDED, "1");
+    for (const sample of pending) {
+      if (status) status.textContent = `Adding ${sample.title}…`;
+      const imported = await importTabFromUrl(sample.url);
+      await saveSong({
+        id: sample.id,
+        title: sample.title,
+        text: imported.tab,
+        sourceUrl: imported.sourceUrl,
+        createdAt: Date.now(),
+      });
+      localStorage.setItem(seedFlag(sample.id), "1");
+    }
     if (view.mode === "list") await paint(root);
   } catch {
+    const failed = pending.find((s) => localStorage.getItem(seedFlag(s.id)) !== "1");
     if (status) {
-      status.textContent = "Could not add Wonderwall automatically. Paste the Ultimate Guitar link and import.";
+      status.textContent = failed
+        ? `Could not add ${failed.title} automatically. Paste the Ultimate Guitar link and import.`
+        : "Could not add that song automatically.";
     }
     const input = root.querySelector<HTMLInputElement>("[data-url]");
-    if (input && !input.value) input.value = WONDERWALL_URL;
+    if (input && !input.value && failed) input.value = failed.url;
   } finally {
-    seedingWonderwall = false;
+    seedingSamples = false;
   }
 }
 

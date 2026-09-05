@@ -73,6 +73,7 @@ function cleanTitle(s: string): string {
   return s
     .replace(/\s*[|].*$/, "")
     .replace(/\s+\((?:tab|chords|guitar pro).*?\)/i, "")
+    .replace(/^Misc Traditional\s+[–-]\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }

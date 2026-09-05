@@ -1,4 +1,4 @@
-const CACHE = "songbook-v3";
+const CACHE = "songbook-v4";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
