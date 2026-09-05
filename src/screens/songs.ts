@@ -1,6 +1,14 @@
 import { h, escapeHtml } from "../dom";
 import { extractChords, likelyChordLine, CHORD_REGEX } from "../theory";
 import { deleteSong, getSong, listSongs, newId, saveSong, type Song } from "../storage";
+import { importTabFromUrl } from "../importUrl";
+import { isTabLine } from "../tabparse";
+import { diagramForSymbol, shapeToTab, voicingForSymbol } from "../voicings";
+import { playChord } from "../audio";
+
+const WONDERWALL_ID = "sample-wonderwall";
+const WONDERWALL_URL = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-27596";
+const WONDERWALL_SEEDED = "songbook-seeded-wonderwall";
 
 type View = { mode: "list" } | { mode: "edit"; draft: Draft } | { mode: "read"; id: string };
 
@@ -8,28 +16,37 @@ interface Draft {
   id?: string;
   title: string;
   text: string;
+  sourceUrl?: string;
   image?: Blob;
   status: string;
   progress: number;
 }
 
 let view: View = { mode: "list" };
+let seedingWonderwall = false;
+let chordPop: HTMLElement | null = null;
+
+window.addEventListener("hashchange", closeChordPop);
 
 export function renderSongs(root: HTMLElement): void {
   void paint(root);
 }
 
 async function paint(root: HTMLElement): Promise<void> {
+  closeChordPop();
   if (view.mode === "list") {
     const songs = await listSongs();
     root.innerHTML = h`
       <div>
-        <p class="muted">Photograph a chord sheet or screenshot. The app reads the lyrics, highlights chords, and stores the song on this phone.</p>
+        <p class="muted">Scan a photo, paste a chord sheet, or import a public Ultimate Guitar link. Songs stay on this phone.</p>
+        <input class="field" data-url placeholder="https://tabs.ultimate-guitar.com/…" inputmode="url" autocapitalize="off" autocomplete="off" />
         <div class="btn-row">
-          <button class="btn" data-act="photo">Scan photo</button>
+          <button class="btn" data-act="import">Import link</button>
+          <button class="btn ghost" data-act="photo">Scan photo</button>
           <button class="btn ghost" data-act="paste">Paste text</button>
         </div>
         <input class="hidden-file" type="file" accept="image/*" data-file />
+        <p class="muted" data-status></p>
         ${
           songs.length === 0
             ? `<div class="empty">No saved songs yet.</div>`
@@ -53,12 +70,17 @@ async function paint(root: HTMLElement): Promise<void> {
       view = { mode: "edit", draft: { title: "Untitled song", text: "", status: "", progress: 0 } };
       void paint(root);
     });
+    root.querySelector("[data-act=import]")?.addEventListener("click", () => void importLink(root));
+    root.querySelector("[data-url]")?.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") void importLink(root);
+    });
     root.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((btn) => {
       btn.addEventListener("click", () => {
         view = { mode: "read", id: btn.dataset.open! };
         void paint(root);
       });
     });
+    void ensureWonderwall(root);
     return;
   }
 
@@ -74,7 +96,12 @@ async function paint(root: HTMLElement): Promise<void> {
         <button class="btn ghost" data-act="back">All songs</button>
         <div class="panel">
           <h2>${escapeHtml(song.title)}</h2>
-          <p class="muted">${extractChords(song.text).join(" · ") || "No chords detected"}</p>
+          <p class="muted">${song.sourceUrl ? `<a class="source" href="${escapeHtml(song.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(hostOf(song.sourceUrl))}</a> · ` : ""}${chordHits(
+            song.text
+              .split("\n")
+              .filter((line) => !isTabLine(line))
+              .join("\n"),
+          )}</p>
         </div>
         <div class="paper" style="margin-top:12px">${renderLyricHtml(song.text)}</div>
         <div class="btn-row">
@@ -90,15 +117,17 @@ async function paint(root: HTMLElement): Promise<void> {
     root.querySelector("[data-act=edit]")?.addEventListener("click", () => {
       view = {
         mode: "edit",
-        draft: { id: song.id, title: song.title, text: song.text, image: song.image, status: "", progress: 0 },
+        draft: { id: song.id, title: song.title, text: song.text, sourceUrl: song.sourceUrl, image: song.image, status: "", progress: 0 },
       };
       void paint(root);
     });
     root.querySelector("[data-act=delete]")?.addEventListener("click", async () => {
+      if (song.id === WONDERWALL_ID) localStorage.setItem(WONDERWALL_SEEDED, "1");
       await deleteSong(song.id);
       view = { mode: "list" };
       void paint(root);
     });
+    bindChordHits(root);
     return;
   }
 
@@ -138,6 +167,7 @@ async function paint(root: HTMLElement): Promise<void> {
       id: draft.id ?? newId(),
       title: draft.title.trim() || firstLine(draft.text) || "Untitled song",
       text: draft.text.trim(),
+      sourceUrl: draft.sourceUrl?.trim() || undefined,
       createdAt: Date.now(),
       image: draft.image,
     };
@@ -145,6 +175,69 @@ async function paint(root: HTMLElement): Promise<void> {
     view = { mode: "read", id: song.id };
     void paint(root);
   });
+}
+
+async function importLink(root: HTMLElement): Promise<void> {
+  const input = root.querySelector<HTMLInputElement>("[data-url]");
+  const status = root.querySelector("[data-status]");
+  const url = input?.value.trim() || WONDERWALL_URL;
+  if (status) status.textContent = "Reading that page…";
+  try {
+    const imported = await importTabFromUrl(url);
+    view = {
+      mode: "edit",
+      draft: {
+        title: imported.title,
+        text: imported.tab,
+        sourceUrl: imported.sourceUrl,
+        status: "",
+        progress: 0,
+      },
+    };
+    await paint(root);
+  } catch (err) {
+    if (status) status.textContent = err instanceof Error ? err.message : "Import failed.";
+  }
+}
+
+async function ensureWonderwall(root: HTMLElement): Promise<void> {
+  if (localStorage.getItem(WONDERWALL_SEEDED) === "1" || seedingWonderwall) return;
+  const existing = await getSong(WONDERWALL_ID);
+  if (existing) {
+    localStorage.setItem(WONDERWALL_SEEDED, "1");
+    return;
+  }
+  seedingWonderwall = true;
+  const status = root.querySelector("[data-status]");
+  if (status) status.textContent = "Adding Wonderwall…";
+  try {
+    const imported = await importTabFromUrl(WONDERWALL_URL);
+    await saveSong({
+      id: WONDERWALL_ID,
+      title: imported.title || "Oasis – Wonderwall",
+      text: imported.tab,
+      sourceUrl: imported.sourceUrl,
+      createdAt: Date.now(),
+    });
+    localStorage.setItem(WONDERWALL_SEEDED, "1");
+    if (view.mode === "list") await paint(root);
+  } catch {
+    if (status) {
+      status.textContent = "Could not add Wonderwall automatically. Paste the Ultimate Guitar link and import.";
+    }
+    const input = root.querySelector<HTMLInputElement>("[data-url]");
+    if (input && !input.value) input.value = WONDERWALL_URL;
+  } finally {
+    seedingWonderwall = false;
+  }
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 async function startOcr(root: HTMLElement, file: File): Promise<void> {
@@ -216,8 +309,56 @@ function highlightChords(escapedLine: string, force: boolean): string {
   const re = new RegExp(CHORD_REGEX.source, "g");
   return escapedLine.replace(re, (chord) => {
     if (!force && chord.length === 1) return chord;
-    return `<span class="chord">${chord}</span>`;
+    return `<button type="button" class="chord" data-chord="${chord}">${chord}</button>`;
   });
+}
+
+function chordHits(text: string): string {
+  const chords = extractChords(text);
+  if (!chords.length) return "No chords detected";
+  return chords
+    .map((c) => `<button type="button" class="chord-hit" data-chord="${escapeHtml(c)}">${escapeHtml(c)}</button>`)
+    .join(" · ");
+}
+
+function bindChordHits(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>("[data-chord]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openChordPop(el.dataset.chord ?? "");
+    });
+  });
+}
+
+function closeChordPop(): void {
+  chordPop?.remove();
+  chordPop = null;
+}
+
+function openChordPop(symbol: string): void {
+  const chord = symbol.trim();
+  if (!chord) return;
+  closeChordPop();
+  const voicing = voicingForSymbol(chord);
+  chordPop = document.createElement("div");
+  chordPop.className = "chord-pop";
+  chordPop.innerHTML = `
+    <div class="chord-pop-card">
+      <div class="voicing-head">${escapeHtml(chord)}</div>
+      ${diagramForSymbol(chord)}
+      ${
+        voicing
+          ? `<pre class="chord-tab">${shapeToTab(voicing.shape)}</pre>`
+          : `<p class="muted" style="grid-column:1/-1;margin:0">No guitar shape for this chord yet.</p>`
+      }
+    </div>
+  `;
+  chordPop.addEventListener("click", (e) => {
+    if (e.target === chordPop) closeChordPop();
+  });
+  document.body.append(chordPop);
+  playChord(chord.replace(/\/[A-G][#b]?$/, ""));
 }
 
 async function prepareImage(file: Blob): Promise<HTMLCanvasElement> {

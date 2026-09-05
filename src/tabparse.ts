@@ -31,7 +31,7 @@ function unwrapMarkup(text: string): string {
   return text
     .replace(/\[ch\]([\s\S]*?)\[\/ch\]/gi, "$1")
     .replace(/\[tab\]([\s\S]*?)\[\/tab\]/gi, "\n$1\n")
-    .replace(/\[\/?(?:intro|verse|chorus|bridge|solo|outro|tab|ch)\]/gi, "")
+    .replace(/\[\/?(?:tab|ch)\]/gi, "")
     .replace(/```[\w]*\n?/g, "")
     .replace(/!\[[^\]]*]\([^)]+\)/g, "")
     .replace(/\[([^\]]+)]\([^)]+\)/g, "$1");
@@ -79,24 +79,39 @@ function cleanTitle(s: string): string {
 
 function pickBody(text: string): string {
   const lines = text.split("\n").map((l) => l.replace(/\s+$/, ""));
-  const tabIdx = lines.findIndex(isTabLine);
-  const start = tabIdx === -1 ? 0 : Math.max(0, tabIdx - 24);
+  const stopAt = lines.findIndex((line) =>
+    /please rate this tab|create correction|welcome offer|\d+\s+comments|sign in to comment/i.test(line),
+  );
+  const usable = stopAt === -1 ? lines : lines.slice(0, stopAt);
+  const tabCount = usable.filter(isTabLine).length;
+  const filled = usable.filter((l) => l.trim()).length;
+  const sectionIdx = usable.findIndex((line) =>
+    /^\s*#*\s*\[?(intro|verse|chorus|bridge|solo|outro|instrumental|pre-chorus|interlude)/i.test(line),
+  );
+  const tabIdx = usable.findIndex(isTabLine);
+  const mostlyTab = tabCount >= 8 && filled > 0 && tabCount >= filled * 0.25;
+  let start = 0;
+  if (mostlyTab && tabIdx !== -1) start = Math.max(0, tabIdx - 24);
+  else if (sectionIdx !== -1) start = sectionIdx;
 
-  const sliced = lines.slice(start).filter((line, i, arr) => {
+  const sliced = usable.slice(start).filter((line, i, arr) => {
     if (!line.trim()) return true;
     if (isTabLine(line)) return true;
-    if (/^\s*\[?(intro|verse|chorus|bridge|solo|outro|instrumental|pre-chorus|interlude)/i.test(line)) {
+    if (/^\s*#*\s*\[?(intro|verse|chorus|bridge|solo|outro|instrumental|pre-chorus|interlude)/i.test(line)) {
       return true;
     }
     if (/^\s*[A-G][#b]?(m|maj7|m7|7|sus\d|dim|aug)?(\s+[A-G][#b]?)/.test(line)) return true;
     const next = arr.slice(i, i + 6);
     if (next.filter(isTabLine).length >= 4) return true;
     const letterCount = (line.match(/[A-Za-z]/g) ?? []).length;
-    const junk = /cookie|subscribe|premium|sign in|advertisement|download the app/i.test(line);
+    const junk =
+      /cookie|subscribe|premium|sign in|advertisement|download the app|check out the tab|added to favorites|contributors total/i.test(
+        line,
+      ) || /^\s*\|/.test(line);
     return letterCount > 8 && letterCount < 90 && !junk && line.length < 140;
   });
 
-  return sliced.join("\n").replace(/\n{3,}/g, "\n\n");
+  return sliced.join("\n").replace(/^\s*```[\w]*\s*$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function renderTabHtml(text: string, escapeHtml: (s: string) => string): string {

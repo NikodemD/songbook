@@ -71,7 +71,7 @@ export function renderScales(root: HTMLElement): void {
           <p class="muted">${tuning.name}</p>
           <button type="button" class="fret-wrap compact" data-expand aria-label="Expand fretboard">
             ${fretboardHtml(tuning.midi, pitches, state.key, scale, pref, state.labels, "horizontal")}
-            <span class="fret-hint">Tap to expand</span>
+            <span class="fret-hint">Tap to expand · turn the phone sideways</span>
           </button>
           <div class="legend">
             <span><i style="background:var(--root)"></i>Root</span>
@@ -161,7 +161,10 @@ function openFretOverlay(
       <span>${noteName(key, pref)} ${scale.name}</span>
       <button type="button" class="btn ghost" data-close>Close</button>
     </div>
-    ${fretboardHtml(midi, pitches, key, scale, pref, labels, "vertical")}
+    <p class="rotate-hint">Turn your phone sideways</p>
+    <div class="fret-stage">
+      ${fretboardHtml(midi, pitches, key, scale, pref, labels, "expanded")}
+    </div>
   `;
   overlay.querySelector("[data-close]")?.addEventListener("click", () => closeScaleOverlay());
   overlay.addEventListener("click", (e) => {
@@ -195,12 +198,13 @@ function fretboardHtml(
   scale: ScaleDef,
   pref: AccidentalPref,
   labels: "notes" | "degrees",
-  orientation: "horizontal" | "vertical",
+  orientation: "horizontal" | "expanded",
 ): string {
-  const cell = (openMidi: number, fret: number, extra = ""): string => {
+  const cell = (openMidi: number, fret: number): string => {
     const pc = (openMidi + fret) % 12;
+    const inlay = [3, 5, 7, 9, 12].includes(fret) ? " inlay-fret" : "";
     if (!pitches.has(pc)) {
-      return `<div class="fret-cell ${fret === 0 ? "nut" : ""} ${extra}">${fret === 0 ? noteName(openMidi, pref) : ""}</div>`;
+      return `<div class="fret-cell ${fret === 0 ? "nut" : ""}${inlay}">${fret === 0 ? noteName(openMidi, pref) : ""}</div>`;
     }
     const rel = (pc - key + 12) % 12;
     const isRoot = rel === 0;
@@ -209,27 +213,21 @@ function fretboardHtml(
     const text =
       labels === "degrees" ? (degree ?? "") : degree ? noteNameForDegree(key, degree) : noteName(pc, pref);
     const cls = `dot${isRoot ? " root" : ""}${isBlue ? " blue" : ""}`;
-    return `<div class="fret-cell ${fret === 0 ? "nut" : ""} ${extra}"><span class="${cls}">${text}</span></div>`;
+    return `<div class="fret-cell ${fret === 0 ? "nut" : ""}${inlay}"><span class="${cls}">${text}</span></div>`;
   };
-
-  if (orientation === "vertical") {
-    const header = [`<div class="fret-num"></div>`]
-      .concat(midi.map((openMidi) => `<div class="fret-num">${noteName(openMidi, pref)}</div>`))
-      .join("");
-    const rows = Array.from({ length: FRETS + 1 }, (_, fret) => {
-      const label = `<div class="fret-num">${fret === 0 ? "0" : fret}</div>`;
-      const cells = midi.map((openMidi) => cell(openMidi, fret)).join("");
-      return `${label}${cells}`;
-    }).join("");
-    return `<div class="fretboard vertical">${header}${rows}</div>`;
-  }
 
   const strings = [...midi].reverse();
   const rows = strings
-    .map((openMidi) => `<div class="string-row">${Array.from({ length: FRETS + 1 }, (_, fret) => cell(openMidi, fret)).join("")}</div>`)
+    .map(
+      (openMidi, i) =>
+        `<div class="string-row" data-gauge="${i + 1}"><span class="string-wire"></span>${Array.from({ length: FRETS + 1 }, (_, fret) => cell(openMidi, fret)).join("")}</div>`,
+    )
     .join("");
   const nums = [`<div class="fret-num"></div>`]
     .concat(Array.from({ length: FRETS }, (_, i) => `<div class="fret-num">${i + 1}</div>`))
     .join("");
-  return `<div class="fretboard">${rows}<div class="fret-nums">${nums}</div></div>`;
+  const inlays = [3, 5, 7, 9]
+    .map((fret) => `<span class="inlay" style="grid-column:${fret + 1}"></span>`)
+    .join("");
+  return `<div class="fretboard ${orientation === "expanded" ? "expanded" : ""}"><div class="inlays" aria-hidden="true">${inlays}<span class="inlay double" style="grid-column:13"></span></div>${rows}<div class="fret-nums">${nums}</div></div>`;
 }

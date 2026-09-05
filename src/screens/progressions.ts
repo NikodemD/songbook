@@ -1,7 +1,7 @@
 import { h } from "../dom";
 import { playChord, playProgression } from "../audio";
 import { KEYS, PROGRESSIONS, chordsForProgression, noteName, prefersFlats, type AccidentalPref } from "../theory";
-import { CHORD_QUALITIES, chordDiagramSvg, shapeToTab, voicingsFor } from "../voicings";
+import { CHORD_QUALITIES, diagramForSymbol, shapeToTab, voicingsFor, chordDiagramSvg } from "../voicings";
 
 type Mode = "builder" | "progressions";
 
@@ -88,7 +88,8 @@ export function renderProgressions(root: HTMLElement): void {
       const card = document.createElement("button");
       card.className = "voicing-card";
       card.innerHTML = `
-        ${chordDiagramSvg(v.shape, v.name)}
+        <div class="voicing-head">${v.name}</div>
+        ${chordDiagramSvg(v.shape)}
         <pre class="chord-tab">${shapeToTab(v.shape)}</pre>
       `;
       card.addEventListener("click", () => playChord(symbol));
@@ -159,29 +160,6 @@ export function renderProgressions(root: HTMLElement): void {
   };
 
   paint();
-}
-
-function diagramForSymbol(chord: string): string {
-  const m = chord.match(/^([A-G][#b]?)(.*)$/);
-  if (!m) return chordDiagramSvg([-1, -1, -1, -1, -1, -1], chord);
-  const rootPc = noteIndex(m[1]!);
-  const quality = normalizeQuality(m[2] ?? "");
-  const first = voicingsFor(rootPc, quality)[0];
-  return chordDiagramSvg(first?.shape ?? [-1, -1, -1, -1, -1, -1], chord);
-}
-
-function noteIndex(note: string): number {
-  const sharp = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const flat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  const i = sharp.indexOf(note);
-  if (i >= 0) return i;
-  return Math.max(0, flat.indexOf(note));
-}
-
-function normalizeQuality(q: string): string {
-  if (q === "min" || q === "m") return "m";
-  if (q === "maj") return "";
-  return q;
 }
 
 function fillChips<T>(

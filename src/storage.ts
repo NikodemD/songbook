@@ -8,6 +8,7 @@ export interface Song {
   title: string;
   text: string;
   createdAt: number;
+  sourceUrl?: string;
   image?: Blob;
 }
 

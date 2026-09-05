@@ -359,7 +359,7 @@ export function shapeForChord(chord: string): number[] | null {
 }
 
 export const CHORD_REGEX =
-  /\b([A-G](?:#|b)?)(maj7|maj|min|m7|m|sus4|sus2|dim|aug|add9|add11|6|7|9|11|13)?(\/[A-G](?:#|b)?)?\b/g;
+  /\b([A-G](?:#|b)?)(maj7|maj|min|m7b5|m7|m|7sus4|sus4|sus2|dim|aug|add9|add11|13|11|9|7|6)?(\/[A-G](?:#|b)?)?\b/g;
 
 export function extractChords(text: string): string[] {
   const found: string[] = [];
