@@ -1,6 +1,13 @@
 const TAB_LINE =
   /^\s*(?:[eEBGDA]b?|[EeDdAa]\d)?\s*[|:]*[-~=0-9hpbxrvs\/\\().*| ]{8,}[|:]*\s*$/;
 
+export function isChordLine(line: string): boolean {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  const token = /^[A-G][#b]?(maj7|maj|min|m7b5|m7|m|7sus4|sus4|sus2|dim|aug|add9|add11|13|11|9|7|6)?(\/[A-G][#b]?)?$/;
+  return tokens.every((t) => token.test(t));
+}
+
 export function isTabLine(line: string): boolean {
   const t = line.trim();
   if (t.length < 8) return false;
@@ -98,6 +105,11 @@ function pickBody(text: string): string {
   const sliced = usable.slice(start).filter((line, i, arr) => {
     if (!line.trim()) return true;
     if (isTabLine(line)) return true;
+    if (isChordLine(line)) return true;
+    if (/official .+ tab made by ug|is this strumming pattern|there is no strumming|create and get \+5/i.test(line)) {
+      return false;
+    }
+    if (/^\s*#+\s/.test(line)) return false;
     if (/^\s*#*\s*\[?(intro|verse|chorus|bridge|solo|outro|instrumental|pre-chorus|interlude)/i.test(line)) {
       return true;
     }

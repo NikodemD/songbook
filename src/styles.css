@@ -740,6 +740,11 @@ textarea {
   line-height: 1.45;
 }
 
+.paper .syl {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
 .paper .chord {
   appearance: none;
   border: 0;
@@ -752,6 +757,12 @@ textarea {
   font-size: inherit;
   line-height: inherit;
   cursor: pointer;
+}
+
+.paper .syl .chord {
+  display: block;
+  line-height: 1.15;
+  font-size: 0.82em;
 }
 
 .chord-hit {

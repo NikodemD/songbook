@@ -2,7 +2,7 @@ import { h, escapeHtml } from "../dom";
 import { extractChords, likelyChordLine, CHORD_REGEX } from "../theory";
 import { deleteSong, getSong, listSongs, newId, saveSong, type Song } from "../storage";
 import { importTabFromUrl } from "../importUrl";
-import { isTabLine } from "../tabparse";
+import { isTabLine, isChordLine } from "../tabparse";
 import { diagramForSymbol, shapeToTab, voicingForSymbol } from "../voicings";
 import { playChord } from "../audio";
 
@@ -220,7 +220,7 @@ async function importLink(root: HTMLElement): Promise<void> {
 }
 
 function seedFlag(id: string): string {
-  return `songbook-seeded-${id}`;
+  return `songbook-seeded-${id}-v2`;
 }
 
 async function ensureSampleSongs(root: HTMLElement): Promise<void> {
@@ -228,10 +228,6 @@ async function ensureSampleSongs(root: HTMLElement): Promise<void> {
   const pending: typeof SAMPLE_SONGS = [];
   for (const sample of SAMPLE_SONGS) {
     if (localStorage.getItem(seedFlag(sample.id)) === "1") continue;
-    if (await getSong(sample.id)) {
-      localStorage.setItem(seedFlag(sample.id), "1");
-      continue;
-    }
     pending.push(sample);
   }
   if (!pending.length) return;
@@ -326,16 +322,43 @@ function cleanupOcr(text: string): string {
 }
 
 export function renderLyricHtml(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      const safe = escapeHtml(line) || "&nbsp;";
-      if (!likelyChordLine(line)) {
-        return highlightChords(safe, false);
-      }
-      return highlightChords(safe, true);
-    })
-    .join("<br>");
+  const lines = text.split("\n");
+  const html: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const next = lines[i + 1];
+    if (next !== undefined && isChordLine(line) && next.trim() && !isChordLine(next) && !isTabLine(next)) {
+      html.push(renderAlignedPair(line, next));
+      i += 1;
+      continue;
+    }
+    const safe = escapeHtml(line) || "&nbsp;";
+    html.push(likelyChordLine(line) ? highlightChords(safe, true) : highlightChords(safe, false));
+  }
+  return html.join("<br>");
+}
+
+function chordButton(chord: string): string {
+  return `<button type="button" class="chord" data-chord="${chord}">${chord}</button>`;
+}
+
+function renderAlignedPair(chordLine: string, lyric: string): string {
+  const re = new RegExp(CHORD_REGEX.source, "g");
+  const marks = [...chordLine.matchAll(re)].map((m) => ({ i: m.index ?? 0, c: m[0] }));
+  if (!marks.length) return highlightChords(escapeHtml(lyric), false);
+  const parts: string[] = [];
+  let cursor = 0;
+  for (let k = 0; k < marks.length; k++) {
+    const mark = marks[k]!;
+    const start = Math.min(mark.i, lyric.length);
+    const end = k + 1 < marks.length ? Math.min(marks[k + 1]!.i, lyric.length) : lyric.length;
+    if (start > cursor) parts.push(escapeHtml(lyric.slice(cursor, start)));
+    const chunk = lyric.slice(start, Math.max(end, start));
+    parts.push(`<span class="syl">${chordButton(mark.c)}${escapeHtml(chunk || " ")}</span>`);
+    cursor = Math.max(end, start);
+  }
+  if (cursor < lyric.length) parts.push(escapeHtml(lyric.slice(cursor)));
+  return parts.join("");
 }
 
 function highlightChords(escapedLine: string, force: boolean): string {
